@@ -513,6 +513,18 @@
   </div>
 </div>
 
+<!-- Clear-order confirmation -->
+<div class="breakdown-overlay" id="clear-confirm-overlay" style="z-index:160">
+  <div class="breakdown-box" style="width:420px">
+    <div class="breakdown-title" style="color:var(--danger)">CLEAR ORDER?</div>
+    <div id="clear-confirm-msg" style="font-size:14px;color:var(--text);line-height:1.5;margin:10px 0 1.4rem"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-ghost" onclick="closeClearConfirm()">Cancel</button>
+      <button class="btn" style="background:var(--danger);color:#fff" onclick="confirmClearOrder()">Yes, clear it</button>
+    </div>
+  </div>
+</div>
+
 <!-- Type breakdown modal -->
 <div class="breakdown-overlay" id="breakdown-overlay">
   <div class="breakdown-box">
@@ -1119,8 +1131,14 @@ async function fetchOrder(o) {
     }
     offset = data.offset;
   } while (offset);
+  // Preserve locally-scanned lines that haven't been saved to Airtable yet
+  // (write still in flight or failing) so a refresh never wipes the running total.
+  const local = orders[o] || {};
+  for (const key in local) {
+    if (!local[key].airtableId && !built[key]) built[key] = local[key];
+  }
   orders[o] = built;
-  if (o === currentOrder) cart = orders[currentOrder];
+  if (o === currentOrder) cart = orders[o];
 }
 
 async function fetchAllOrders() {
@@ -1157,7 +1175,7 @@ async function upsertLine(key) {
       }
     } while (it._dirty);
   } catch (e) {
-    setSyncStatus('⚠ sync failed — token needs data.records:write');
+    setSyncStatus('⚠ NOT saving to Airtable — token is read-only (open ⚙, use a read+write token)');
   } finally {
     it._writing = false;
     pendingWrites--;
@@ -1209,8 +1227,20 @@ function updateCart() {
   `).join('');
 }
 
-async function clearCart() {
-  if (!confirm('Clear all items from the ' + currentOrder.toUpperCase() + ' order? This removes them from Airtable too. Other orders are not affected.')) return;
+function clearCart() {
+  const items = Object.values(cart);
+  const qty = items.reduce((s, i) => s + i.qty, 0);
+  document.getElementById('clear-confirm-msg').innerHTML =
+    'Remove all <b>' + qty + ' case' + (qty === 1 ? '' : 's') + '</b> from the <b style="color:var(--accent)">'
+    + currentOrder.toUpperCase() + '</b> order?<br><br>This deletes them from Airtable too. Other locations are not affected.';
+  document.getElementById('clear-confirm-overlay').style.display = 'flex';
+}
+function closeClearConfirm() {
+  document.getElementById('clear-confirm-overlay').style.display = 'none';
+  if (loaded) barcodeInput.focus();
+}
+async function confirmClearOrder() {
+  closeClearConfirm();
   const o = currentOrder;
   const ids = Object.values(orders[o]).map(i => i.airtableId).filter(Boolean);
   orders[o] = {};
