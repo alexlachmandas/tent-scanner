@@ -291,6 +291,31 @@
   }
   .export-btn:hover { background: rgba(245,200,66,0.2); }
 
+  /* Type breakdown modal */
+  .breakdown-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; align-items: center; justify-content: center; z-index: 150; }
+  .breakdown-box { background: var(--surface); border: 1px solid var(--border-bright); border-radius: 14px; padding: 1.5rem; width: 520px; max-width: 95vw; max-height: 88vh; display: flex; flex-direction: column; }
+  .breakdown-title { font-family: var(--display); font-size: 24px; color: var(--accent); letter-spacing: 0.05em; }
+  .breakdown-sub { font-size: 12px; color: var(--muted); font-family: var(--mono); margin-bottom: 1rem; }
+  .breakdown-list { overflow-y: auto; display: flex; flex-direction: column; gap: 6px; }
+  .bd-type { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .bd-type-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px; cursor: pointer; transition: background 0.15s; }
+  .bd-type-head:hover { background: var(--surface2); }
+  .bd-caret { color: var(--muted); font-size: 11px; width: 10px; transition: transform 0.15s; }
+  .bd-type.open .bd-caret { transform: rotate(90deg); }
+  .bd-type-name { flex: 1; font-weight: 600; font-size: 15px; }
+  .bd-type-qty { font-family: var(--display); font-size: 22px; color: var(--accent); letter-spacing: 0.04em; }
+  .bd-type-unit { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-left: 3px; }
+  .bd-type-money { font-family: var(--mono); font-size: 13px; color: var(--gold); min-width: 84px; text-align: right; }
+  .bd-items { display: none; border-top: 1px solid var(--border); }
+  .bd-type.open .bd-items { display: block; }
+  .bd-item { display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 32px; font-size: 13px; border-bottom: 1px solid var(--border); }
+  .bd-item:last-child { border-bottom: none; }
+  .bd-item-name { flex: 1; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .bd-item-qty { font-family: var(--mono); color: var(--accent2); }
+  .bd-item-money { font-family: var(--mono); color: var(--gold); min-width: 72px; text-align: right; }
+  .breakdown-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 1rem; padding-top: 12px; border-top: 1px solid var(--border-bright); }
+  .breakdown-foot .bf-total { font-family: var(--display); font-size: 24px; color: var(--gold); letter-spacing: 0.05em; }
+
   .flash-success { animation: flashGreen 0.5s ease; }
   .flash-error { animation: flashRed 0.5s ease; }
   @keyframes flashGreen {
@@ -482,7 +507,21 @@
         <span class="total-label">TOTAL</span>
         <span class="total-amount" id="total-amount">$0.00</span>
       </div>
+      <button class="export-btn" style="margin-bottom:8px;background:rgba(255,107,43,0.12);border-color:rgba(255,107,43,0.35);color:var(--accent2)" onclick="openBreakdown()">&#128202; Breakdown by type</button>
       <button class="export-btn" onclick="exportCart()">&#8659; Export to CSV</button>
+    </div>
+  </div>
+</div>
+
+<!-- Type breakdown modal -->
+<div class="breakdown-overlay" id="breakdown-overlay">
+  <div class="breakdown-box">
+    <div class="breakdown-title">TYPE BREAKDOWN</div>
+    <div class="breakdown-sub" id="breakdown-sub"></div>
+    <div class="breakdown-list" id="breakdown-list"></div>
+    <div class="breakdown-foot">
+      <div><span style="font-size:11px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.1em">Order total</span><div class="bf-total" id="breakdown-total">$0.00</div></div>
+      <button class="btn btn-ghost" onclick="closeBreakdown()">Close</button>
     </div>
   </div>
 </div>
@@ -1141,6 +1180,8 @@ function updateCart() {
   document.getElementById('total-amount').textContent = '$' + totalPrice.toFixed(2);
 
   renderOrderSelect();
+  const _bdo = document.getElementById('breakdown-overlay');
+  if (_bdo && _bdo.style.display === 'flex') renderBreakdown();
 
   const container = document.getElementById('cart-items');
   if (!items.length) {
@@ -1194,6 +1235,46 @@ function exportCart() {
   a.href = url; a.download = `tent-${currentOrder}-${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ---- Type breakdown of the current order ----
+function openBreakdown() { renderBreakdown(); document.getElementById('breakdown-overlay').style.display = 'flex'; }
+function closeBreakdown() { document.getElementById('breakdown-overlay').style.display = 'none'; if (loaded) barcodeInput.focus(); }
+function renderBreakdown() {
+  const items = Object.values(cart);
+  const groups = {};
+  for (const i of items) {
+    const t = (i.type && String(i.type).trim()) ? i.type : 'Uncategorized';
+    if (!groups[t]) groups[t] = { qty: 0, total: 0, items: [] };
+    groups[t].qty += i.qty;
+    groups[t].total += i.qty * (i.price || 0);
+    groups[t].items.push(i);
+  }
+  const types = Object.keys(groups).sort((a, b) => groups[b].qty - groups[a].qty);
+  const grandQty = items.reduce((s, i) => s + i.qty, 0);
+  const grandTotal = items.reduce((s, i) => s + i.qty * (i.price || 0), 0);
+
+  document.getElementById('breakdown-sub').textContent =
+    currentOrder.toUpperCase() + ' · ' + grandQty + ' cases · ' + types.length + ' type' + (types.length === 1 ? '' : 's');
+  document.getElementById('breakdown-total').textContent = '$' + grandTotal.toFixed(2);
+
+  const list = document.getElementById('breakdown-list');
+  if (!types.length) { list.innerHTML = '<div class="loading-msg">Nothing scanned into this order yet.</div>'; return; }
+  list.innerHTML = types.map(t => {
+    const g = groups[t];
+    const sub = g.items.slice().sort((a, b) => b.qty - a.qty).map(i =>
+      '<div class="bd-item"><div class="bd-item-name">' + escapeHtml(i.name) + '</div>'
+      + '<div class="bd-item-qty">' + i.qty + ' cs</div>'
+      + '<div class="bd-item-money">$' + (i.qty * (i.price || 0)).toFixed(2) + '</div></div>'
+    ).join('');
+    return '<div class="bd-type">'
+      + '<div class="bd-type-head" onclick="this.parentNode.classList.toggle(\'open\')">'
+      + '<span class="bd-caret">&#9654;</span>'
+      + '<span class="bd-type-name">' + escapeHtml(t) + '</span>'
+      + '<span class="bd-type-qty">' + g.qty + '<span class="bd-type-unit">cs</span></span>'
+      + '<span class="bd-type-money">$' + g.total.toFixed(2) + '</span>'
+      + '</div><div class="bd-items">' + sub + '</div></div>';
+  }).join('');
 }
 
 // Enter key support
