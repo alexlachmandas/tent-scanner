@@ -858,7 +858,15 @@ async function saveConfig() {
   await loadInventory();
 }
 
-async function loadInventory() {
+let _invLoading = null;
+function loadInventory() {
+  // single-flight: if a load is already running, reuse it instead of starting a
+  // second concurrent load (two concurrent loads would double the product list).
+  if (_invLoading) return _invLoading;
+  _invLoading = _loadInventoryImpl().finally(() => { _invLoading = null; });
+  return _invLoading;
+}
+async function _loadInventoryImpl() {
   const errEl = document.getElementById('cfg-error');
   const statusDot = document.getElementById('status-dot');
   const statusText = document.getElementById('status-text');
