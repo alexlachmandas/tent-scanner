@@ -584,6 +584,18 @@ if (localStorage.getItem('tent_config_version') !== CONFIG_VERSION) {
 }
 
 let config = JSON.parse(localStorage.getItem('tent_config') || 'null') || DEFAULT_CONFIG;
+// If the tent app has no token yet, reuse the one the fireworks scanner already saved
+// (both apps share the alexlachmandas.github.io origin, so localStorage is shared).
+if (!config.token) {
+  try {
+    const fw = JSON.parse(localStorage.getItem('fw_config') || 'null');
+    if (fw && fw.token) {
+      config.token = fw.token;
+      if (!config.base) config.base = fw.base || config.base;
+      if (!config.table) config.table = fw.table || config.table;
+    }
+  } catch (e) {}
+}
 let cart = {};
 const ORDERS = ['dj','49','pv','greenbrier','goodlettsville','mt juliet','trenton','peachers','hwy41a','warfield'];
 let orders = {};        // order name -> { barcode: item } ; each is an independent running order
