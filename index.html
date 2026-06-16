@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>⛺ Tent Scanner</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Bebas+Neue&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --surface2: #1c1c27;
+    --border: rgba(255,255,255,0.08);
+    --border-bright: rgba(255,255,255,0.15);
+    --accent: #ff6b2b;
+    --accent2: #ffb347;
+    --gold: #f5c842;
+    --text: #f0ede8;
+    --muted: #7a7a8a;
+    --success: #3ddc84;
+    --danger: #ff4f4f;
+    --mono: 'DM Mono', monospace;
+    --display: 'Bebas Neue', sans-serif;
+    --body: 'DM Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--body);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  .header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 1rem 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    font-family: var(--display);
+    font-size: 28px;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .logo span { color: var(--text); }
+
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .status-label {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--mono);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .main { display: grid; grid-template-columns: 1fr 380px; min-height: calc(100vh - 65px); }
+
+  .left { padding: 1.5rem; display: flex; flex-direction: column; gap: 1.25rem; }
+  .right { background: var(--surface); border-left: 1px solid var(--border); display: flex; flex-direction: column; }
+
+  /* Scan bar */
+  .scan-zone {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+  }
+  .scan-label {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .scan-row { display: flex; gap: 10px; }
+  .scan-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border-bright);
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-size: 16px;
+    font-family: var(--mono);
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .scan-input:focus { border-color: var(--accent); }
+  .scan-input::placeholder { color: var(--muted); }
+
+  .btn {
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    font-family: var(--body);
+    transition: all 0.15s;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: white;
+  }
+  .btn-primary:hover { background: #ff7d42; transform: translateY(-1px); }
+  .btn-primary:active { transform: scale(0.98); }
+  .btn-ghost {
+    background: var(--surface2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { color: var(--text); border-color: var(--border-bright); }
+
+  /* Item card */
+  .item-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.25rem;
+    transition: border-color 0.3s;
+    flex: 1;
+  }
+  .item-card.found { border-color: var(--success); }
+  .item-card.not-found { border-color: var(--danger); }
+  .item-card.empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 200px; gap: 8px; }
+
+  .empty-icon { font-size: 40px; opacity: 0.3; }
+  .empty-text { color: var(--muted); font-size: 14px; }
+
+  .item-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; }
+  .item-name { font-size: 22px; font-weight: 600; line-height: 1.2; }
+  .item-sku { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-top: 4px; }
+
+  .cat-badge {
+    font-size: 11px;
+    font-family: var(--mono);
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: rgba(255,107,43,0.15);
+    color: var(--accent2);
+    border: 1px solid rgba(255,107,43,0.3);
+    white-space: nowrap;
+  }
+
+  .item-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .field {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 10px 14px;
+  }
+  .field.full { grid-column: 1/-1; }
+  .field-label { font-size: 10px; font-family: var(--mono); color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px; }
+  .field-val { font-size: 16px; font-weight: 500; }
+  .field-val.price { color: var(--gold); font-size: 22px; font-family: var(--display); letter-spacing: 0.05em; }
+
+  /* Stats */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    text-align: center;
+  }
+  .stat-val { font-family: var(--display); font-size: 32px; color: var(--accent); letter-spacing: 0.05em; }
+  .stat-val.total-val { color: var(--gold); }
+  .stat-label { font-size: 11px; font-family: var(--mono); color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-top: 2px; }
+
+  /* Cart panel */
+  .cart-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .cart-title {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .clear-btn {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--danger);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: background 0.15s;
+  }
+  .clear-btn:hover { background: rgba(255,79,79,0.1); }
+
+  .cart-items { flex: 1; overflow-y: auto; padding: 0.5rem; }
+
+  .cart-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 10px;
+    border-radius: 8px;
+    transition: background 0.15s;
+    border-bottom: 1px solid var(--border);
+  }
+  .cart-item:last-child { border-bottom: none; }
+  .cart-item:hover { background: var(--surface2); }
+
+  .cart-qty {
+    background: var(--accent);
+    color: white;
+    font-weight: 600;
+    font-size: 13px;
+    width: 26px; height: 26px;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    font-family: var(--mono);
+  }
+
+  .cart-info { flex: 1; min-width: 0; }
+  .cart-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cart-sku { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+
+  .cart-price { font-family: var(--mono); font-size: 13px; color: var(--gold); flex-shrink: 0; }
+
+  .cart-footer {
+    border-top: 1px solid var(--border);
+    padding: 1rem 1.25rem;
+  }
+  .total-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .total-label { font-size: 13px; color: var(--muted); font-family: var(--mono); }
+  .total-amount { font-family: var(--display); font-size: 36px; color: var(--gold); letter-spacing: 0.05em; }
+
+  .export-btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    background: rgba(245,200,66,0.1);
+    border: 1px solid rgba(245,200,66,0.3);
+    color: var(--gold);
+    font-family: var(--mono);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    letter-spacing: 0.05em;
+  }
+  .export-btn:hover { background: rgba(245,200,66,0.2); }
+
+  .flash-success { animation: flashGreen 0.5s ease; }
+  .flash-error { animation: flashRed 0.5s ease; }
+  @keyframes flashGreen {
+    0% { border-color: var(--success); background: rgba(61,220,132,0.1); }
+    100% { border-color: var(--border); background: var(--surface); }
+  }
+  @keyframes flashRed {
+    0% { border-color: var(--danger); background: rgba(255,79,79,0.1); }
+    100% { border-color: var(--border); background: var(--surface); }
+  }
+
+  .error-msg { color: var(--danger); font-size: 14px; text-align: center; padding: 1rem; }
+  .loading-msg { color: var(--muted); font-size: 13px; font-family: var(--mono); text-align: center; padding: 1rem; }
+
+  /* Assign-barcode panel */
+  .assign-results { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+  .assign-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 9px 12px; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  }
+  .assign-row:hover { border-color: var(--accent); background: var(--surface2); }
+  .assign-row-name { font-size: 14px; font-weight: 500; }
+  .assign-row-sub { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-top: 2px; }
+  .assign-row-pick { font-size: 11px; font-family: var(--mono); color: var(--accent); flex-shrink: 0; }
+
+  /* Config modal */
+  .config-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.85);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100;
+  }
+  .config-box {
+    background: var(--surface);
+    border: 1px solid var(--border-bright);
+    border-radius: 14px;
+    padding: 2rem;
+    width: 480px;
+    max-width: 95vw;
+  }
+  .config-title { font-family: var(--display); font-size: 26px; color: var(--accent); margin-bottom: 6px; letter-spacing: 0.05em; }
+  .config-sub { font-size: 13px; color: var(--muted); margin-bottom: 1.5rem; }
+  .config-field { margin-bottom: 14px; }
+  .config-label { font-size: 11px; font-family: var(--mono); color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 6px; }
+  .config-input {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border-bright);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 14px;
+    font-family: var(--mono);
+    color: var(--text);
+    outline: none;
+  }
+  .config-input:focus { border-color: var(--accent); }
+  .config-note { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .config-error { font-size: 12px; color: var(--danger); margin-top: 8px; }
+
+  @media (max-width: 768px) {
+    .main { grid-template-columns: 1fr; }
+    .right { border-left: none; border-top: 1px solid var(--border); }
+    .stats { grid-template-columns: repeat(3,1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">⛺ <span>TENT</span> SCANNER</div>
+  <div class="status-label">
+    <div class="status-dot" id="status-dot" style="background:var(--muted);box-shadow:none"></div>
+    <span id="status-text">Not connected</span>
+  </div>
+</div>
+
+<div class="main">
+  <div class="left">
+
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-val" id="count">0</div>
+        <div class="stat-label">Items</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val" id="skus">0</div>
+        <div class="stat-label">SKUs</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val total-val" id="total-top">$0.00</div>
+        <div class="stat-label">Total</div>
+      </div>
+    </div>
+
+    <!-- Scan bar -->
+    <div class="scan-zone" id="scan-zone">
+      <div class="scan-label">&#9654; Scan barcode or enter item code</div>
+      <div class="scan-row">
+        <input type="text" class="scan-input" id="barcode-input" placeholder="Scan or type barcode..." autofocus />
+        <button class="btn btn-primary" onclick="scanBarcode()">Scan</button>
+        <button class="btn btn-ghost" onclick="toggleAssign()" title="Assign a barcode to a product">&#127991;</button>
+        <button class="btn btn-ghost" onclick="toggleManual()" title="Add item manually">&#9998;</button>
+        <button class="btn btn-ghost" onclick="openConfig()">&#9881;</button>
+      </div>
+    </div>
+
+    <!-- Item display -->
+    <div class="item-card empty" id="item-card">
+      <div class="empty-icon">&#127748;</div>
+      <div class="empty-text">Scan a barcode to see item details</div>
+    </div>
+
+    <!-- Manual add -->
+    <div class="scan-zone" id="manual-zone" style="display:none">
+      <div class="scan-label">&#9998; Add item manually</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+        <div>
+          <div class="field-label" style="margin-bottom:4px;font-size:10px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.1em">Item Name</div>
+          <input class="scan-input" id="manual-name" placeholder="e.g. Artillery Shell Kit" style="width:100%;font-size:14px;padding:10px 12px" />
+        </div>
+        <div>
+          <div class="field-label" style="margin-bottom:4px;font-size:10px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.1em">Case Price</div>
+          <input class="scan-input" id="manual-price" placeholder="0.00" type="number" step="0.01" style="width:100%;font-size:14px;padding:10px 12px" />
+        </div>
+        <div>
+          <div class="field-label" style="margin-bottom:4px;font-size:10px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.1em">Brand (optional)</div>
+          <input class="scan-input" id="manual-brand" placeholder="e.g. Phantom" style="width:100%;font-size:14px;padding:10px 12px" />
+        </div>
+        <div>
+          <div class="field-label" style="margin-bottom:4px;font-size:10px;font-family:var(--mono);color:var(--muted);text-transform:uppercase;letter-spacing:0.1em">Qty</div>
+          <input class="scan-input" id="manual-qty" placeholder="1" type="number" min="1" value="1" style="width:100%;font-size:14px;padding:10px 12px" />
+        </div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-primary" style="flex:1" onclick="addManualItem()">Add to Order</button>
+        <button class="btn btn-ghost" onclick="toggleManual()">Cancel</button>
+      </div>
+      <div id="manual-error" style="font-size:12px;color:var(--danger);margin-top:8px;display:none"></div>
+    </div>
+
+    <!-- Assign barcode to an existing product -->
+    <div class="scan-zone" id="assign-zone" style="display:none">
+      <div class="scan-label" style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <span>&#127991; Assign barcode to a product</span>
+        <span id="assign-missing-count"></span>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
+        <input class="scan-input" id="assign-search" placeholder="Search products by name..." style="flex:1;font-size:14px;padding:10px 12px" oninput="renderAssignResults(this.value)" />
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;font-family:var(--mono);color:var(--muted);white-space:nowrap;cursor:pointer">
+          <input type="checkbox" id="assign-missing-only" onchange="renderAssignResults(document.getElementById('assign-search').value)" /> Missing only
+        </label>
+      </div>
+      <div id="assign-results" class="assign-results"></div>
+
+      <div id="assign-selected" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
+        <div class="field-label" style="margin-bottom:4px">Selected product</div>
+        <div id="assign-selected-name" style="font-size:16px;font-weight:600;margin-bottom:2px"></div>
+        <div id="assign-current" style="font-size:12px;color:var(--muted);margin-bottom:10px"></div>
+        <div style="display:flex;gap:10px">
+          <input class="scan-input" id="assign-barcode" placeholder="Scan or type barcode..." style="flex:1" onkeydown="if(event.key==='Enter')saveAssignBarcode()" />
+          <button class="btn btn-primary" id="assign-save-btn" onclick="saveAssignBarcode()">Save</button>
+        </div>
+        <div id="assign-msg" style="font-size:12px;margin-top:8px;display:none"></div>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <button class="btn btn-ghost" onclick="toggleAssign()">Close</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Cart panel -->
+  <div class="right">
+    <div class="cart-header">
+      <span class="cart-title">&#9776; Session Cart</span>
+      <button class="clear-btn" onclick="clearCart()">Clear all</button>
+    </div>
+    <div class="cart-items" id="cart-items">
+      <div class="loading-msg" style="margin-top:2rem">No items scanned yet</div>
+    </div>
+    <div class="cart-footer">
+      <div class="total-row">
+        <span class="total-label">TOTAL</span>
+        <span class="total-amount" id="total-amount">$0.00</span>
+      </div>
+      <button class="export-btn" onclick="exportCart()">&#8659; Export to CSV</button>
+    </div>
+  </div>
+</div>
+
+<!-- Config modal -->
+<div class="config-overlay" id="config-overlay">
+  <div class="config-box">
+    <div class="config-title">SETUP</div>
+    <div class="config-sub">Connect your Airtable inventory to get started.</div>
+
+    <div class="config-field">
+      <div class="config-label">Airtable API Token</div>
+      <input class="config-input" id="cfg-token" type="password" placeholder="patXXXXXXXX..." />
+      <div class="config-note">Create at airtable.com/create/tokens — needs data.records:read and data.records:write scope (write is required to assign barcodes)</div>
+    </div>
+
+    <div class="config-field">
+      <div class="config-label">Base ID</div>
+      <input class="config-input" id="cfg-base" type="text" placeholder="appXXXXXXXXXXXXXX" />
+    </div>
+
+    <div class="config-field">
+      <div class="config-label">Table Name</div>
+      <input class="config-input" id="cfg-table" type="text" placeholder="Products" />
+    </div>
+
+    <div class="config-field">
+      <div class="config-label">Barcode Field Name</div>
+      <input class="config-input" id="cfg-barcode-field" type="text" placeholder="case barcode" />
+      <div class="config-note">Exact field name in Airtable used for barcode lookup</div>
+    </div>
+
+    <div class="config-field">
+      <div class="config-label">Price Field Name</div>
+      <input class="config-input" id="cfg-price-field" type="text" placeholder="Price" />
+    </div>
+
+    <div class="config-field">
+      <div class="config-label">Category Field Name (optional)</div>
+      <input class="config-input" id="cfg-cat-field" type="text" placeholder="Category" />
+    </div>
+
+    <div class="config-field">
+      <div class="config-label">Stock Qty Field Name (optional)</div>
+      <input class="config-input" id="cfg-stock-field" type="text" placeholder="Stock Qty" />
+    </div>
+
+    <div id="cfg-error" class="config-error"></div>
+
+    <div style="display:flex;gap:10px;margin-top:1.25rem">
+      <button class="btn btn-primary" style="flex:1" onclick="saveConfig()">Connect & Test</button>
+      <button class="btn btn-ghost" onclick="closeConfig()" id="cfg-cancel" style="display:none">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Duplicate modal -->
+<div id="dupe-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:200;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid #ffb347;border-radius:14px;padding:1.75rem;width:460px;max-width:95vw;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+      <span style="font-size:24px;">⚠️</span>
+      <div style="font-family:var(--display);font-size:24px;color:#ffb347;letter-spacing:0.05em;">DUPLICATE BARCODE</div>
+    </div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:1.25rem;font-family:var(--mono);" id="dupe-barcode-label"></div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:10px;">This barcode matches multiple items. Tap <strong style="color:var(--text)">Add</strong> next to the correct one.</div>
+    <div id="dupe-items" style="display:flex;flex-direction:column;gap:8px;margin-bottom:1.25rem;"></div>
+    <button class="btn btn-ghost" style="width:100%" onclick="closeDupeModal()">Cancel — don't add any</button>
+  </div>
+</div>
+
+<script>
+const DEFAULT_CONFIG = {
+  token: '',
+  base: 'appvruZBoBq56LcvF',
+  table: 'Products',
+  barcodeField: 'case barcode',
+  priceField: 'Case Price',
+  unitPriceField: 'MSRP',
+  catField: 'Type',
+  brandField: 'Brand',
+  casePackField: 'Case Pack'
+};
+
+const FIELDS = {
+  barcode: 'Case Barcode',
+  name: 'Item Name',
+  casePack: 'Case Pack',
+  brand: 'Brand',
+  type: 'Type',
+  price: 'Case Price',
+  msrp: 'MSRP'
+};
+
+// Clear old cached config if it's outdated
+const CONFIG_VERSION = '2';
+if (localStorage.getItem('tent_config_version') !== CONFIG_VERSION) {
+  localStorage.removeItem('tent_config');
+  localStorage.setItem('tent_config_version', CONFIG_VERSION);
+}
+
+let config = JSON.parse(localStorage.getItem('tent_config') || 'null') || DEFAULT_CONFIG;
+let cart = {};
+let inventory = {};
+let duplicateBarcodes = {};
+let loaded = false;
+let allProducts = [];        // every product (incl. ones with no/blank barcode) for the assign tool
+let assignTarget = null;     // product currently selected in the assign panel
+
+const barcodeInput = document.getElementById('barcode-input');
+const escapeHtml = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// Pre-fill config form
+function toggleManual() {
+  const zone = document.getElementById('manual-zone');
+  const card = document.getElementById('item-card');
+  const showing = zone.style.display !== 'none';
+  zone.style.display = showing ? 'none' : 'block';
+  if (!showing) {
+    card.style.display = 'none';
+    document.getElementById('manual-name').focus();
+  } else {
+    card.style.display = '';
+    barcodeInput.focus();
+  }
+}
+
+function prefillManual(barcode) {
+  const zone = document.getElementById('manual-zone');
+  document.getElementById('manual-zone').style.display = 'block';
+  document.getElementById('item-card').style.display = 'none';
+  document.getElementById('manual-name').value = '';
+  document.getElementById('manual-price').value = '';
+  document.getElementById('manual-brand').value = barcode;
+  document.getElementById('manual-qty').value = '1';
+  document.getElementById('manual-name').focus();
+}
+
+function addManualItem() {
+  const name = document.getElementById('manual-name').value.trim();
+  const price = parseFloat(document.getElementById('manual-price').value) || 0;
+  const brand = document.getElementById('manual-brand').value.trim();
+  const qty = parseInt(document.getElementById('manual-qty').value) || 1;
+  const errEl = document.getElementById('manual-error');
+  if (!name) { errEl.textContent = 'Item name is required.'; errEl.style.display = 'block'; return; }
+  errEl.style.display = 'none';
+  const key = 'MANUAL-' + Date.now();
+  cart[key] = { barcode: 'MANUAL', name, brand, type: 'Manual Entry', casePack: '', price: price, msrp: 0, qty };
+  updateCart();
+  document.getElementById('manual-name').value = '';
+  document.getElementById('manual-price').value = '';
+  document.getElementById('manual-brand').value = '';
+  document.getElementById('manual-qty').value = '1';
+  document.getElementById('manual-zone').style.display = 'none';
+  document.getElementById('item-card').style.display = '';
+  const card = document.getElementById('item-card');
+  card.className = 'item-card found';
+  card.innerHTML = '<div class="item-top"><div><div class="item-name">' + name + '</div><div class="item-sub">Manual entry</div></div><div class="cat-badge">Manual</div></div><div class="item-fields"><div class="field"><div class="field-label">Price</div><div class="field-val price">$' + price.toFixed(2) + '</div></div><div class="field"><div class="field-label">Qty Added</div><div class="field-val">' + qty + '</div></div></div>';
+  barcodeInput.focus();
+}
+
+// ---- Assign barcode to an existing Airtable product ----
+function toggleAssign() {
+  const zone = document.getElementById('assign-zone');
+  const card = document.getElementById('item-card');
+  const showing = zone.style.display !== 'none';
+  document.getElementById('manual-zone').style.display = 'none';
+  zone.style.display = showing ? 'none' : 'block';
+  if (!showing) {
+    card.style.display = 'none';
+    assignTarget = null;
+    document.getElementById('assign-selected').style.display = 'none';
+    document.getElementById('assign-search').value = '';
+    document.getElementById('assign-missing-only').checked = false;
+    renderAssignResults('');
+    updateAssignCounter();
+    document.getElementById('assign-search').focus();
+  } else {
+    card.style.display = '';
+    barcodeInput.focus();
+  }
+}
+
+function renderAssignResults(query) {
+  const box = document.getElementById('assign-results');
+  if (!loaded) { box.innerHTML = '<div class="loading-msg">Connect to Airtable first (&#9881;).</div>'; return; }
+  const onlyMissing = document.getElementById('assign-missing-only').checked;
+  const q = (query || '').trim().toLowerCase();
+  let list = allProducts;
+  if (onlyMissing) list = list.filter(p => !p.barcode);
+  if (q) list = list.filter(p => (p.name || '').toLowerCase().includes(q));
+  const total = list.length;
+  list = list.slice(0, 30);
+  if (!list.length) { box.innerHTML = '<div class="loading-msg">No matching products.</div>'; return; }
+  box.innerHTML = list.map(p => {
+    const tag = p.barcode
+      ? '<span style="color:var(--success)">' + escapeHtml(p.barcode) + '</span>'
+      : '<span style="color:var(--danger)">no barcode</span>';
+    return '<div class="assign-row" onclick="selectAssignProduct(\'' + p.id + '\')">'
+      + '<div><div class="assign-row-name">' + escapeHtml(p.name || '(unnamed)') + '</div>'
+      + '<div class="assign-row-sub">' + (p.brand ? escapeHtml(p.brand) + ' &bull; ' : '') + tag + '</div></div>'
+      + '<div class="assign-row-pick">Select &rsaquo;</div></div>';
+  }).join('') + (total > 30 ? '<div class="loading-msg">Showing 30 of ' + total + ' — keep typing to narrow.</div>' : '');
+}
+
+function selectAssignProduct(id) {
+  const p = allProducts.find(x => x.id === id);
+  if (!p) return;
+  assignTarget = p;
+  document.getElementById('assign-selected').style.display = 'block';
+  document.getElementById('assign-selected-name').textContent = p.name || '(unnamed)';
+  document.getElementById('assign-current').innerHTML = p.barcode
+    ? 'Current barcode: <strong>' + escapeHtml(p.barcode) + '</strong> — saving will replace it'
+    : 'No barcode yet';
+  const inp = document.getElementById('assign-barcode');
+  inp.value = '';
+  inp.focus();
+  document.getElementById('assign-msg').style.display = 'none';
+}
+
+function showAssignMsg(text, color) {
+  const m = document.getElementById('assign-msg');
+  m.textContent = text; m.style.color = color; m.style.display = 'block';
+}
+
+function updateAssignCounter() {
+  const el = document.getElementById('assign-missing-count');
+  if (!el) return;
+  if (!loaded) { el.textContent = ''; return; }
+  const n = allProducts.filter(p => !p.barcode).length;
+  el.textContent = n > 0 ? (n + ' still missing') : 'all barcoded ✓';
+  el.style.color = n > 0 ? 'var(--accent2)' : 'var(--success)';
+}
+
+async function saveAssignBarcode() {
+  if (!assignTarget) { showAssignMsg('Pick a product from the list first.', 'var(--danger)'); return; }
+  const inp = document.getElementById('assign-barcode');
+  const val = inp.value.trim();
+  if (!val) { showAssignMsg('Enter or scan a barcode first.', 'var(--danger)'); return; }
+  const clash = allProducts.find(p => p.barcode === val && p.id !== assignTarget.id);
+
+  const btn = document.getElementById('assign-save-btn');
+  btn.disabled = true;
+  showAssignMsg('Saving to Airtable…', 'var(--muted)');
+  try {
+    const url = `https://api.airtable.com/v0/${config.base}/${encodeURIComponent(config.table)}/${assignTarget.id}`;
+    const res = await fetch(url, {
+      method: 'PATCH',
+      headers: { 'Authorization': `Bearer ${config.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: { [FIELDS.barcode]: val }, typecast: false })
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error((e.error && (e.error.message || e.error.type)) || `HTTP ${res.status}`);
+    }
+    // update local state so lookups + the list reflect the change immediately
+    const old = assignTarget.barcode;
+    if (old && old !== val && inventory[old]) delete inventory[old];
+    assignTarget.barcode = val;
+    inventory[val] = {
+      name: assignTarget.name, price: assignTarget.price || 0, msrp: assignTarget.msrp || 0,
+      brand: assignTarget.brand || '', type: assignTarget.type || '', casePack: assignTarget.casePack || '', barcode: val
+    };
+    let msg = '✓ Saved — ' + (assignTarget.name || 'product') + ' → ' + val;
+    if (clash) msg += '  (heads up: also on "' + (clash.name || 'another product') + '")';
+    showAssignMsg(msg, 'var(--success)');
+    document.getElementById('assign-current').innerHTML = 'Current barcode: <strong>' + escapeHtml(val) + '</strong>';
+    renderAssignResults(document.getElementById('assign-search').value);
+    updateAssignCounter();
+  } catch (err) {
+    showAssignMsg('Error: ' + err.message + ' — token needs data.records:write access.', 'var(--danger)');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function fillConfigForm() {
+  document.getElementById('cfg-token').value = config.token || '';
+  document.getElementById('cfg-base').value = config.base || '';
+  document.getElementById('cfg-table').value = config.table || 'Products';
+  document.getElementById('cfg-barcode-field').value = config.barcodeField || 'case barcode';
+  document.getElementById('cfg-price-field').value = config.priceField || 'Case Price';
+  document.getElementById('cfg-cat-field').value = config.catField || 'Type';
+  document.getElementById('cfg-stock-field').value = config.stockField || 'Stock Qty';
+}
+
+function openConfig() {
+  fillConfigForm();
+  document.getElementById('cfg-cancel').style.display = loaded ? 'block' : 'none';
+  document.getElementById('config-overlay').style.display = 'flex';
+}
+
+function closeConfig() {
+  document.getElementById('config-overlay').style.display = 'none';
+}
+
+async function saveConfig() {
+  const token = document.getElementById('cfg-token').value.trim();
+  const base = document.getElementById('cfg-base').value.trim();
+  const table = document.getElementById('cfg-table').value.trim();
+  const barcodeField = document.getElementById('cfg-barcode-field').value.trim();
+  const priceField = document.getElementById('cfg-price-field').value.trim();
+  const catField = document.getElementById('cfg-cat-field').value.trim();
+  const stockField = document.getElementById('cfg-stock-field').value.trim();
+  const errEl = document.getElementById('cfg-error');
+
+  if (!token || !base || !table || !barcodeField || !priceField) {
+    errEl.textContent = 'Please fill in all required fields.';
+    return;
+  }
+  errEl.textContent = '';
+
+  config = { token, base, table, barcodeField, priceField, catField, stockField, unitPriceField: 'MSRP', brandField: 'Brand', casePackField: 'Case Pack' };
+  localStorage.setItem('tent_config', JSON.stringify(config));
+
+  errEl.style.color = 'var(--muted)';
+  errEl.textContent = 'Connecting to Airtable...';
+
+  await loadInventory();
+}
+
+async function loadInventory() {
+  const errEl = document.getElementById('cfg-error');
+  const statusDot = document.getElementById('status-dot');
+  const statusText = document.getElementById('status-text');
+
+  statusDot.style.background = 'var(--muted)';
+  statusDot.style.boxShadow = 'none';
+  statusText.textContent = 'Loading...';
+
+  try {
+    inventory = {};
+    allProducts = [];
+    let offset = null;
+    let page = 0;
+
+    do {
+      let url = `https://api.airtable.com/v0/${config.base}/${encodeURIComponent(config.table)}?pageSize=100`;
+      if (offset) url += `&offset=${offset}`;
+
+      const res = await fetch(url, {
+        headers: { 'Authorization': `Bearer ${config.token}` }
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error?.message || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      offset = data.offset;
+      page++;
+
+      for (const rec of data.records) {
+        const f = rec.fields;
+        const barcode = f[FIELDS.barcode] || f['Case Barcode'] || f['case barcode'] || f['Barcode'] || f['barcode'];
+        allProducts.push({
+          id: rec.id,
+          name: f[FIELDS.name] || f['Item Name'] || '',
+          brand: f[FIELDS.brand] || f['Brand'] || '',
+          type: f[FIELDS.type] || f['Type'] || '',
+          casePack: f[FIELDS.casePack] || f['Case Pack'] || '',
+          price: parseFloat(f[FIELDS.price] || f['Case Price']) || 0,
+          msrp: parseFloat(f[FIELDS.msrp] || f['MSRP']) || 0,
+          barcode: barcode ? String(barcode).trim() : ''
+        });
+        if (barcode) {
+          const bKey = String(barcode).trim();
+          if (inventory[bKey]) {
+            if (!duplicateBarcodes[bKey]) {
+              duplicateBarcodes[bKey] = [{ name: inventory[bKey].name, brand: inventory[bKey].brand, price: inventory[bKey].price }];
+            }
+            duplicateBarcodes[bKey].push({ name: f[FIELDS.name] || 'Unknown', brand: f[FIELDS.brand] || '', price: parseFloat(f[FIELDS.price]) || 0 });
+          }
+          inventory[bKey] = {
+            name: f[FIELDS.name] || f['Item Name'] || 'Unknown Item',
+            price: parseFloat(f[FIELDS.price] || f['Case Price']) || 0,
+            msrp: parseFloat(f[FIELDS.msrp] || f['MSRP']) || 0,
+            brand: f[FIELDS.brand] || f['Brand'] || '',
+            type: f[FIELDS.type] || f['Type'] || '',
+            casePack: f[FIELDS.casePack] || f['Case Pack'] || '',
+            barcode: bKey
+          };
+        }
+      }
+      statusText.textContent = 'Loading... ' + Object.keys(inventory).length + ' items';
+    } while (offset);
+
+    const count = Object.keys(inventory).length;
+
+    if (count === 0) {
+      // Fetch one raw record to show available field names for debugging
+      let diagUrl = `https://api.airtable.com/v0/${config.base}/${encodeURIComponent(config.table)}?pageSize=1`;
+      const diagRes = await fetch(diagUrl, { headers: { Authorization: `Bearer ${config.token}` } });
+      const diagData = await diagRes.json();
+      const fieldNames = diagData.records && diagData.records[0] ? Object.keys(diagData.records[0].fields).join(', ') : 'no records returned';
+      if (errEl) { errEl.style.color = 'var(--danger)'; errEl.textContent = `Connected! 0 items matched barcode field ${FIELDS.barcode}. Fields found in your table: ${fieldNames}`; }
+      statusDot.style.background = 'var(--danger)';
+      statusText.textContent = 'No items found';
+      return;
+    }
+
+    // Check for duplicate barcodes
+    duplicateBarcodes = {};
+    const barcodeCount = {};
+    for (const rec of Object.values(inventory)) {
+      const b = rec.barcode;
+      barcodeCount[b] = (barcodeCount[b] || 0) + 1;
+    }
+    // Since inventory dedupes by barcode key, re-scan raw records
+    // We'll track dupes during the load loop instead - see below
+    
+    loaded = true;
+    closeConfig();
+    statusDot.style.background = 'var(--success)';
+    statusDot.style.boxShadow = '0 0 8px var(--success)';
+    const missing = allProducts.filter(p => !p.barcode).length;
+    const barcoded = allProducts.length - missing;
+    statusText.textContent = `${allProducts.length} products · ${barcoded} with barcode` + (missing ? ` · ${missing} missing` : '');
+    updateAssignCounter();
+
+  } catch (e) {
+    if (errEl) { errEl.style.color = 'var(--danger)'; errEl.textContent = `Error: ${e.message}`; }
+    statusDot.style.background = 'var(--danger)';
+    statusText.textContent = 'Connection failed';
+    console.error(e);
+  }
+}
+
+function scanBarcode() {
+  const input = document.getElementById('barcode-input');
+  const val = input.value.trim();
+  if (!val) return;
+  processBarcode(val);
+  input.value = '';
+  input.focus();
+}
+
+function processBarcode(barcode) {
+  const card = document.getElementById('item-card');
+  const zone = document.getElementById('scan-zone');
+
+  if (!loaded) {
+    card.className = 'item-card not-found';
+    card.innerHTML = `<div class="error-msg">Not connected to Airtable yet.<br>Click ⚙ to configure.</div>`;
+    return;
+  }
+
+  // Try exact match first, then case-insensitive
+  let item = inventory[barcode] || inventory[barcode.toUpperCase()] || inventory[barcode.toLowerCase()];
+
+  // fuzzy: strip leading zeros or spaces
+  if (!item) {
+    const stripped = barcode.replace(/^0+/, '');
+    item = inventory[stripped];
+  }
+
+  if (!item) {
+    card.className = 'item-card not-found';
+    card.innerHTML = `
+      <div style="text-align:center;padding:1rem">
+        <div style="font-size:36px;margin-bottom:8px;opacity:0.4">&#10060;</div>
+        <div style="font-size:16px;font-weight:500;color:var(--danger)">Not found</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:4px;font-family:var(--mono)">${barcode}</div>
+      </div>`;
+    zone.classList.remove('flash-success');
+    zone.classList.add('flash-error');
+    setTimeout(() => zone.classList.remove('flash-error'), 500);
+    return;
+  }
+
+  // Show item card
+  card.className = 'item-card found';
+  card.innerHTML = `
+    <div class="item-top">
+      <div>
+        <div class="item-name">${item.name}</div>
+        <div class="item-sku">${item.brand ? item.brand + ' &bull; ' : ''}${item.barcode}</div>
+      </div>
+      ${item.type ? `<div class="cat-badge">${item.type}</div>` : ''}
+    </div>
+    <div class="item-fields">
+      <div class="field">
+        <div class="field-label">MSRP</div>
+        <div class="field-val price">$${item.msrp.toFixed(2)}</div>
+      </div>
+      <div class="field">
+        <div class="field-label">Price</div>
+        <div class="field-val price" style="color:var(--accent2)">$${item.price.toFixed(2)}</div>
+      </div>
+      ${item.type ? `<div class="field"><div class="field-label">Type</div><div class="field-val">${item.type}</div></div>` : ''}
+      ${item.casePack ? `<div class="field"><div class="field-label">Case Pack</div><div class="field-val">${item.casePack}</div></div>` : ''}
+      ${item.brand ? `<div class="field"><div class="field-label">Brand</div><div class="field-val">${item.brand}</div></div>` : ''}
+    </div>`;
+
+  zone.classList.remove('flash-error');
+  zone.classList.add('flash-success');
+  setTimeout(() => zone.classList.remove('flash-success'), 500);
+
+  // Add to cart
+  if (cart[item.barcode]) {
+    cart[item.barcode].qty++;
+  } else {
+    cart[item.barcode] = { ...item, qty: 1 };
+  }
+  // store price alias for cart
+  cart[item.barcode].price = item.price;
+  updateCart();
+}
+
+function updateCart() {
+  const items = Object.values(cart);
+  const totalQty = items.reduce((s, i) => s + i.qty, 0);
+  const totalPrice = items.reduce((s, i) => s + i.qty * i.price, 0);
+
+  document.getElementById('count').textContent = totalQty;
+  document.getElementById('skus').textContent = items.length;
+  document.getElementById('total-top').textContent = '$' + totalPrice.toFixed(2);
+  document.getElementById('total-amount').textContent = '$' + totalPrice.toFixed(2);
+
+  const container = document.getElementById('cart-items');
+  if (!items.length) {
+    container.innerHTML = '<div class="loading-msg" style="margin-top:2rem">No items scanned yet</div>';
+    return;
+  }
+
+  container.innerHTML = items.map(i => `
+    <div class="cart-item">
+      <div class="cart-qty">${i.qty}</div>
+      <div class="cart-info">
+        <div class="cart-name">${i.name}</div>
+        <div class="cart-sku">${i.brand || ''} | Pack: ${i.casePack || 'N/A'}</div>
+      </div>
+      <div class="cart-price">$${(i.qty * i.price).toFixed(2)}</div>
+    </div>
+  `).join('');
+}
+
+function clearCart() {
+  cart = {};
+  updateCart();
+  const card = document.getElementById('item-card');
+  card.className = 'item-card empty';
+  card.innerHTML = `<div class="empty-icon">&#127748;</div><div class="empty-text">Scan a barcode to see item details</div>`;
+}
+
+function exportCart() {
+  const items = Object.values(cart);
+  if (!items.length) return;
+  const rows = [['Barcode','Item Name','Brand','Type','Case Pack','MSRP','Price','Qty','Subtotal']];
+  items.forEach(i => rows.push([i.barcode, i.name, i.brand, i.type, i.casePack, (i.msrp||0).toFixed(2), (i.price||0).toFixed(2), i.qty, (i.qty*(i.price||0)).toFixed(2)]));
+  const total = items.reduce((s,i) => s + i.qty*(i.price||0), 0);
+  rows.push(['','','','','TOTAL', total.toFixed(2)]);
+  const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `tent-scan-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Enter key support
+document.getElementById('barcode-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') scanBarcode();
+});
+
+// Init
+fillConfigForm();
+if (config.token && config.base && config.table) {
+  loadInventory();
+} else {
+  document.getElementById('config-overlay').style.display = 'flex';
+}
+</script>
+</body>
+</html>
