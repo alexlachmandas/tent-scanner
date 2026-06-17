@@ -471,6 +471,7 @@
         <span>&#127991; Assign barcode to a product</span>
         <span id="assign-missing-count"></span>
       </div>
+      <div id="assign-pending-banner" style="display:none;background:rgba(255,107,43,0.14);border:1px solid rgba(255,107,43,0.4);border-radius:8px;padding:9px 12px;margin-bottom:8px;font-size:13px;color:var(--accent2);line-height:1.4"></div>
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">
         <input class="scan-input" id="assign-search" placeholder="Search products by name..." style="flex:1;font-size:14px;padding:10px 12px" oninput="renderAssignResults(this.value)" />
         <label style="display:flex;align-items:center;gap:6px;font-size:11px;font-family:var(--mono);color:var(--muted);white-space:nowrap;cursor:pointer">
@@ -663,6 +664,7 @@ let duplicateBarcodes = {};
 let loaded = false;
 let allProducts = [];        // every product (incl. ones with no/blank barcode) for the assign tool
 let assignTarget = null;     // product currently selected in the assign panel
+let pendingAssignBarcode = '';  // barcode from a "not found" scan, to pre-fill when assigning
 
 const barcodeInput = document.getElementById('barcode-input');
 const escapeHtml = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -723,6 +725,8 @@ function toggleAssign() {
   const card = document.getElementById('item-card');
   const showing = zone.style.display !== 'none';
   document.getElementById('manual-zone').style.display = 'none';
+  pendingAssignBarcode = '';
+  document.getElementById('assign-pending-banner').style.display = 'none';
   zone.style.display = showing ? 'none' : 'block';
   if (!showing) {
     card.style.display = 'none';
@@ -737,6 +741,23 @@ function toggleAssign() {
     card.style.display = '';
     barcodeInput.focus();
   }
+}
+
+function openAssignForBarcode(barcode) {
+  pendingAssignBarcode = barcode;
+  document.getElementById('manual-zone').style.display = 'none';
+  document.getElementById('assign-zone').style.display = 'block';
+  document.getElementById('item-card').style.display = 'none';
+  assignTarget = null;
+  document.getElementById('assign-selected').style.display = 'none';
+  document.getElementById('assign-missing-only').checked = false;
+  document.getElementById('assign-search').value = '';
+  const banner = document.getElementById('assign-pending-banner');
+  banner.style.display = 'block';
+  banner.innerHTML = '&#128247; <b>' + escapeHtml(barcode) + '</b> isn\'t in your products yet. Search the product below and tap it to assign this barcode.';
+  renderAssignResults('');
+  updateAssignCounter();
+  document.getElementById('assign-search').focus();
 }
 
 function renderAssignResults(query) {
@@ -771,7 +792,7 @@ function selectAssignProduct(id) {
     ? 'Current barcode: <strong>' + escapeHtml(p.barcode) + '</strong> — saving will replace it'
     : 'No barcode yet';
   const inp = document.getElementById('assign-barcode');
-  inp.value = '';
+  inp.value = pendingAssignBarcode || '';
   inp.focus();
   document.getElementById('assign-msg').style.display = 'none';
 }
@@ -825,6 +846,15 @@ async function saveAssignBarcode() {
     document.getElementById('assign-current').innerHTML = 'Current barcode: <strong>' + escapeHtml(val) + '</strong>';
     renderAssignResults(document.getElementById('assign-search').value);
     updateAssignCounter();
+    if (pendingAssignBarcode && pendingAssignBarcode === val) {
+      // came from a "not found" scan — close the panel and add the now-known item to the order
+      pendingAssignBarcode = '';
+      document.getElementById('assign-pending-banner').style.display = 'none';
+      document.getElementById('assign-zone').style.display = 'none';
+      document.getElementById('item-card').style.display = '';
+      processBarcode(val);
+      barcodeInput.focus();
+    }
   } catch (err) {
     showAssignMsg('Error: ' + err.message + ' — token needs data.records:write access.', 'var(--danger)');
   } finally {
@@ -1024,16 +1054,12 @@ function processBarcode(barcode) {
   }
 
   if (!item) {
-    card.className = 'item-card not-found';
-    card.innerHTML = `
-      <div style="text-align:center;padding:1rem">
-        <div style="font-size:36px;margin-bottom:8px;opacity:0.4">&#10060;</div>
-        <div style="font-size:16px;font-weight:500;color:var(--danger)">Not found</div>
-        <div style="font-size:13px;color:var(--muted);margin-top:4px;font-family:var(--mono)">${barcode}</div>
-      </div>`;
     zone.classList.remove('flash-success');
     zone.classList.add('flash-error');
     setTimeout(() => zone.classList.remove('flash-error'), 500);
+    // Not in the products table — open the assign panel pre-filled with this barcode so
+    // the user can search the product by name and assign it (then it's added to the order).
+    openAssignForBarcode(barcode);
     return;
   }
 
