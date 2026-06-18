@@ -1279,8 +1279,8 @@ function updateCart() {
     return;
   }
 
-  // ordered by when first scanned (oldest at top); tap a row to edit qty / delete
-  const entries = Object.entries(cart).sort((a, b) => (a[1].ts || 0) - (b[1].ts || 0));
+  // ordered by when first scanned (newest at top); tap a row to edit qty / delete
+  const entries = Object.entries(cart).sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
   container.innerHTML = entries.map(([key, i]) => `
     <div class="cart-item" style="cursor:pointer" onclick="openEditItem('${encodeURIComponent(key)}')">
       <div class="cart-qty">${i.qty}</div>
