@@ -323,6 +323,18 @@
   .breakdown-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 1rem; padding-top: 12px; border-top: 1px solid var(--border-bright); }
   .breakdown-foot .bf-total { font-family: var(--display); font-size: 24px; color: var(--gold); letter-spacing: 0.05em; }
 
+  /* Edit-item modal */
+  .edit-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); display: none; align-items: center; justify-content: center; z-index: 170; }
+  .edit-box { background: var(--surface); border: 1px solid var(--border-bright); border-radius: 14px; padding: 1.5rem; width: 380px; max-width: 92vw; }
+  .edit-title { font-size: 18px; font-weight: 600; line-height: 1.2; }
+  .edit-sub { font-size: 12px; color: var(--muted); font-family: var(--mono); margin: 4px 0 1.3rem; }
+  .edit-qty-row { display: flex; align-items: center; gap: 12px; justify-content: center; margin-bottom: 1.4rem; }
+  .edit-qty-row input { width: 96px; text-align: center; font-family: var(--display); font-size: 32px; background: var(--bg); border: 1px solid var(--border-bright); border-radius: 8px; color: var(--text); padding: 6px; outline: none; }
+  .edit-step { width: 48px; height: 48px; border-radius: 10px; border: 1px solid var(--border-bright); background: var(--surface2); color: var(--text); font-size: 26px; line-height: 1; cursor: pointer; }
+  .edit-step:active { background: var(--accent); color: #fff; }
+  .edit-actions { display: flex; gap: 10px; }
+  .edit-actions .btn { flex: 1; }
+
   .flash-success { animation: flashGreen 0.5s ease; }
   .flash-error { animation: flashRed 0.5s ease; }
   @keyframes flashGreen {
@@ -533,6 +545,24 @@
   </div>
 </div>
 
+<!-- Edit cart item -->
+<div class="edit-overlay" id="edit-item-overlay">
+  <div class="edit-box">
+    <div class="edit-title" id="edit-item-name"></div>
+    <div class="edit-sub" id="edit-item-sub"></div>
+    <div class="edit-qty-row">
+      <button class="edit-step" onclick="editQtyStep(-1)">&minus;</button>
+      <input id="edit-item-qty" type="number" inputmode="numeric" min="0" onkeydown="if(event.key==='Enter')saveEditItem()" />
+      <button class="edit-step" onclick="editQtyStep(1)">+</button>
+    </div>
+    <div class="edit-actions">
+      <button class="btn" style="background:var(--danger);color:#fff" onclick="deleteEditItem()">Delete</button>
+      <button class="btn btn-ghost" onclick="closeEditItem()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEditItem()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Type breakdown modal -->
 <div class="breakdown-overlay" id="breakdown-overlay">
   <div class="breakdown-box">
@@ -704,7 +734,7 @@ function addManualItem() {
   if (!name) { errEl.textContent = 'Item name is required.'; errEl.style.display = 'block'; return; }
   errEl.style.display = 'none';
   const key = 'MANUAL-' + Date.now();
-  cart[key] = { barcode: key, name, brand, type: 'Manual Entry', casePack: '', price: price, msrp: 0, qty };
+  cart[key] = { barcode: key, name, brand, type: 'Manual Entry', casePack: '', price: price, msrp: 0, qty, ts: Date.now() };
   updateCart();
   upsertLine(key);
   document.getElementById('manual-name').value = '';
@@ -1095,7 +1125,7 @@ function processBarcode(barcode) {
   if (cart[item.barcode]) {
     cart[item.barcode].qty++;
   } else {
-    cart[item.barcode] = { ...item, qty: 1 };
+    cart[item.barcode] = { ...item, qty: 1, ts: Date.now() };
   }
   // store price alias for cart
   cart[item.barcode].price = item.price;
@@ -1145,7 +1175,8 @@ function itemFromRecord(rec) {
     type: inv ? inv.type : '',
     casePack: inv ? inv.casePack : '',
     qty: f['Qty'] || 0,
-    airtableId: rec.id
+    airtableId: rec.id,
+    ts: rec.createdTime ? Date.parse(rec.createdTime) : Date.now()
   };
 }
 
@@ -1248,8 +1279,10 @@ function updateCart() {
     return;
   }
 
-  container.innerHTML = items.map(i => `
-    <div class="cart-item">
+  // ordered by when first scanned (oldest at top); tap a row to edit qty / delete
+  const entries = Object.entries(cart).sort((a, b) => (a[1].ts || 0) - (b[1].ts || 0));
+  container.innerHTML = entries.map(([key, i]) => `
+    <div class="cart-item" style="cursor:pointer" onclick="openEditItem('${encodeURIComponent(key)}')">
       <div class="cart-qty">${i.qty}</div>
       <div class="cart-info">
         <div class="cart-name">${i.name}</div>
@@ -1258,6 +1291,58 @@ function updateCart() {
       <div class="cart-price">$${(i.qty * i.price).toFixed(2)}</div>
     </div>
   `).join('');
+}
+
+// ---- Edit / delete a single cart line ----
+let editItemKey = null;
+function openEditItem(encKey) {
+  const key = decodeURIComponent(encKey);
+  const it = cart[key];
+  if (!it) return;
+  editItemKey = key;
+  document.getElementById('edit-item-name').textContent = it.name || 'Item';
+  const bc = (it.barcode && it.barcode.indexOf('MANUAL') !== 0) ? it.barcode + ' · ' : '';
+  document.getElementById('edit-item-sub').textContent = bc + '$' + (it.price || 0).toFixed(2) + ' each';
+  document.getElementById('edit-item-qty').value = it.qty;
+  document.getElementById('edit-item-overlay').style.display = 'flex';
+  setTimeout(() => { const q = document.getElementById('edit-item-qty'); q.focus(); q.select(); }, 30);
+}
+function editQtyStep(d) {
+  const el = document.getElementById('edit-item-qty');
+  el.value = Math.max(0, (parseInt(el.value) || 0) + d);
+}
+function closeEditItem() {
+  document.getElementById('edit-item-overlay').style.display = 'none';
+  editItemKey = null;
+  if (loaded) barcodeInput.focus();
+}
+function saveEditItem() {
+  const key = editItemKey;
+  if (!key || !cart[key]) { closeEditItem(); return; }
+  const q = parseInt(document.getElementById('edit-item-qty').value) || 0;
+  if (q <= 0) { deleteEditItem(); return; }
+  cart[key].qty = q;
+  document.getElementById('edit-item-overlay').style.display = 'none';
+  editItemKey = null;
+  updateCart();
+  upsertLine(key);
+  if (loaded) barcodeInput.focus();
+}
+async function deleteEditItem() {
+  const key = editItemKey;
+  if (!key || !cart[key]) { closeEditItem(); return; }
+  const aid = cart[key].airtableId;
+  delete cart[key];
+  document.getElementById('edit-item-overlay').style.display = 'none';
+  editItemKey = null;
+  updateCart();
+  if (aid) {
+    pendingWrites++;
+    try { await fetch(tentUrl(currentOrder) + '/' + aid, { method: 'DELETE', headers: authHeaders() }); }
+    catch (e) { setSyncStatus('⚠ delete did not sync'); }
+    finally { pendingWrites--; }
+  }
+  if (loaded) barcodeInput.focus();
 }
 
 function clearCart() {
