@@ -351,6 +351,14 @@
 
   /* Assign-barcode panel */
   .assign-results { max-height: 260px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+
+  /* Search-and-add dropdown under the scan bar */
+  .search-results { max-height: 250px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
+  .search-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+  .search-row:hover { border-color: var(--accent); background: var(--surface2); }
+  .search-row-name { font-size: 14px; font-weight: 500; }
+  .search-row-sub { font-size: 11px; color: var(--muted); font-family: var(--mono); margin-top: 2px; }
+  .search-row-add { font-size: 12px; font-family: var(--mono); color: var(--accent); flex-shrink: 0; white-space: nowrap; }
   .assign-row {
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
     padding: 9px 12px; background: var(--bg); border: 1px solid var(--border);
@@ -433,14 +441,15 @@
 
     <!-- Scan bar -->
     <div class="scan-zone" id="scan-zone">
-      <div class="scan-label">&#9654; Scan barcode or enter item code</div>
+      <div class="scan-label">&#9654; Scan a barcode, or type a product name to search</div>
       <div class="scan-row">
-        <input type="text" class="scan-input" id="barcode-input" placeholder="Scan or type barcode..." autofocus />
+        <input type="text" class="scan-input" id="barcode-input" placeholder="Scan barcode or type a name…" autofocus oninput="liveSearch(this.value)" />
         <button class="btn btn-primary" onclick="scanBarcode()">Scan</button>
         <button class="btn btn-ghost" onclick="toggleAssign()" title="Assign a barcode to a product">&#127991;</button>
         <button class="btn btn-ghost" onclick="toggleManual()" title="Add item manually">&#9998;</button>
         <button class="btn btn-ghost" onclick="openConfig()">&#9881;</button>
       </div>
+      <div id="search-results" class="search-results" style="display:none"></div>
     </div>
 
     <!-- Item display -->
@@ -1059,8 +1068,56 @@ function scanBarcode() {
   const input = document.getElementById('barcode-input');
   const val = input.value.trim();
   if (!val) return;
+  const sr = document.getElementById('search-results');
+  if (sr && sr.style.display !== 'none' && sr.dataset.top) {
+    addProductToOrder(sr.dataset.top);   // a name search is open — add the top match
+    return;
+  }
   processBarcode(val);
   input.value = '';
+  hideSearch();
+  input.focus();
+}
+
+function hideSearch() {
+  const sr = document.getElementById('search-results');
+  if (sr) { sr.style.display = 'none'; sr.dataset.top = ''; }
+}
+function liveSearch(q) {
+  const sr = document.getElementById('search-results');
+  if (!sr) return;
+  q = (q || '').trim();
+  if (q.length < 2 || !/[a-z]/i.test(q) || !loaded) { hideSearch(); return; }   // name search = has letters
+  const ql = q.toLowerCase();
+  const list = allProducts.filter(p => (p.name || '').toLowerCase().includes(ql)).slice(0, 12);
+  if (!list.length) { hideSearch(); return; }
+  sr.dataset.top = list[0].id;
+  sr.innerHTML = list.map(p => {
+    const key = p.barcode || ('PROD-' + p.id);
+    const inOrder = cart[key] ? cart[key].qty : 0;
+    const sub = (p.brand ? escapeHtml(p.brand) + ' &bull; ' : '') + '$' + (p.price || 0).toFixed(2)
+      + (inOrder ? ' &bull; <span style="color:var(--success)">in order: ' + inOrder + '</span>' : '');
+    return '<div class="search-row" onclick="addProductToOrder(\'' + p.id + '\')">'
+      + '<div><div class="search-row-name">' + escapeHtml(p.name || '(unnamed)') + '</div>'
+      + '<div class="search-row-sub">' + sub + '</div></div>'
+      + '<div class="search-row-add">+ Add</div></div>';
+  }).join('');
+  sr.style.display = 'flex';
+}
+function addProductToOrder(id) {
+  const p = allProducts.find(x => x.id === id);
+  if (!p) return;
+  const key = p.barcode || ('PROD-' + p.id);
+  if (cart[key]) { cart[key].qty++; }
+  else { cart[key] = { barcode: key, name: p.name, price: p.price || 0, msrp: p.msrp || 0, brand: p.brand || '', type: p.type || '', casePack: p.casePack || '', qty: 1, ts: Date.now() }; }
+  updateCart();
+  upsertLine(key);
+  const input = document.getElementById('barcode-input');
+  input.value = '';
+  hideSearch();
+  const zone = document.getElementById('scan-zone');
+  zone.classList.remove('flash-error'); zone.classList.add('flash-success');
+  setTimeout(() => zone.classList.remove('flash-success'), 400);
   input.focus();
 }
 
