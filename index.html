@@ -947,21 +947,26 @@ async function saveConfig() {
 }
 
 let _invLoading = null;
-function loadInventory() {
+function loadInventory(silent) {
   // single-flight: if a load is already running, reuse it instead of starting a
   // second concurrent load (two concurrent loads would double the product list).
   if (_invLoading) return _invLoading;
-  _invLoading = _loadInventoryImpl().finally(() => { _invLoading = null; });
+  _invLoading = _loadInventoryImpl(silent).finally(() => { _invLoading = null; });
   return _invLoading;
 }
-async function _loadInventoryImpl() {
+async function _loadInventoryImpl(silent) {
   const errEl = document.getElementById('cfg-error');
   const statusDot = document.getElementById('status-dot');
   const statusText = document.getElementById('status-text');
 
-  statusDot.style.background = 'var(--muted)';
-  statusDot.style.boxShadow = 'none';
-  statusText.textContent = 'Loading...';
+  // Keep the current list as a fallback so a failed/empty background refresh
+  // never wipes a working inventory (the rebuild only swaps in on success).
+  const _bkInv = inventory, _bkProd = allProducts;
+  if (!silent) {
+    statusDot.style.background = 'var(--muted)';
+    statusDot.style.boxShadow = 'none';
+    statusText.textContent = 'Loading...';
+  }
 
   try {
     inventory = {};
@@ -1018,12 +1023,14 @@ async function _loadInventoryImpl() {
           };
         }
       }
-      statusText.textContent = 'Loading... ' + Object.keys(inventory).length + ' items';
+      if (!silent) statusText.textContent = 'Loading... ' + Object.keys(inventory).length + ' items';
     } while (offset);
 
     const count = Object.keys(inventory).length;
 
     if (count === 0) {
+      inventory = _bkInv; allProducts = _bkProd;   // keep last-known-good list
+      if (silent) return;                          // quiet background refresh
       // Fetch one raw record to show available field names for debugging
       let diagUrl = `https://api.airtable.com/v0/${config.base}/${encodeURIComponent(config.table)}?pageSize=1`;
       const diagRes = await fetch(diagUrl, { headers: { Authorization: `Bearer ${config.token}` } });
@@ -1046,7 +1053,7 @@ async function _loadInventoryImpl() {
     // We'll track dupes during the load loop instead - see below
     
     loaded = true;
-    closeConfig();
+    if (!silent) closeConfig();
     statusDot.style.background = 'var(--success)';
     statusDot.style.boxShadow = '0 0 8px var(--success)';
     const missing = allProducts.filter(p => !p.barcode).length;
@@ -1057,6 +1064,8 @@ async function _loadInventoryImpl() {
     startAutoRefresh();
 
   } catch (e) {
+    inventory = _bkInv; allProducts = _bkProd;     // restore last-known-good on failure
+    if (silent) { console.error(e); return; }
     if (errEl) { errEl.style.color = 'var(--danger)'; errEl.textContent = `Error: ${e.message}`; }
     statusDot.style.background = 'var(--danger)';
     statusText.textContent = 'Connection failed';
@@ -1226,7 +1235,7 @@ function itemFromRecord(rec) {
   return {
     barcode: bc,
     name: f['Item'] || (inv && inv.name) || 'Unknown',
-    price: (f['Price'] != null ? f['Price'] : (inv ? inv.price : 0)) || 0,
+    price: (inv ? inv.price : (f['Price'] != null ? f['Price'] : 0)) || 0,
     msrp: inv ? inv.msrp : 0,
     brand: inv ? inv.brand : '',
     type: inv ? inv.type : '',
@@ -1504,6 +1513,23 @@ if (config.token && config.base && config.table) {
 } else {
   document.getElementById('config-overlay').style.display = 'flex';
 }
+
+// Keep prices & order subtotals live with Airtable. loadInventory(true) silently
+// rebuilds the product list and re-fetches every order; itemFromRecord re-derives
+// each saved line's price from the live product, so running totals refresh too.
+// Triggers: app returns to foreground (tablet/PWA resumed) + every 3 minutes.
+let _lastInvRefresh = Date.now();
+function refreshPrices(force) {
+  if (!loaded || pendingWrites > 0) return;
+  if (!(config.token && config.base && config.table)) return;
+  const now = Date.now();
+  if (!force && now - _lastInvRefresh < 15000) return;  // de-dupe rapid focus/visibility events
+  _lastInvRefresh = now;
+  loadInventory(true);
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') refreshPrices(); });
+window.addEventListener('focus', () => refreshPrices());
+setInterval(() => refreshPrices(true), 180000);
 </script>
 </body>
 </html>
