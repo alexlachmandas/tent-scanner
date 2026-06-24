@@ -1130,6 +1130,44 @@ function addProductToOrder(id) {
   input.focus();
 }
 
+// ---- Audio cues --------------------------------------------------------------
+// Two distinct beeps so the scanner-operator gets feedback without looking up:
+//  • soundNeedsAdd()       = scanned item is NOT in the system (low urgent two-tone)
+//  • soundAlreadyInOrder() = scanned item is ALREADY on this order (quick high double-blip)
+let _audioCtx = null;
+function _audio() {
+  try {
+    if (!_audioCtx) _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_audioCtx.state === 'suspended') _audioCtx.resume();
+    return _audioCtx;
+  } catch (e) { return null; }
+}
+function _beep(freq, startMs, durMs, type, vol) {
+  const ac = _audio(); if (!ac) return;
+  const t = ac.currentTime + startMs / 1000;
+  const osc = ac.createOscillator(), g = ac.createGain();
+  osc.type = type || 'square';
+  osc.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol || 0.3, t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + durMs / 1000);
+  osc.connect(g); g.connect(ac.destination);
+  osc.start(t); osc.stop(t + durMs / 1000 + 0.03);
+}
+function soundNeedsAdd() {        // not in system — urgent, descending
+  _beep(620, 0, 150, 'square', 0.32);
+  _beep(415, 150, 260, 'square', 0.32);
+}
+function soundAlreadyInOrder() {  // already on the order — gentle high double-blip
+  _beep(1245, 0, 90, 'sine', 0.26);
+  _beep(1245, 120, 90, 'sine', 0.26);
+}
+// Prime the audio context on the first user interaction so the very first beep
+// plays reliably (browsers keep AudioContext suspended until a user gesture).
+['pointerdown', 'keydown', 'touchstart'].forEach(function (ev) {
+  window.addEventListener(ev, function () { _audio(); }, { once: true, passive: true });
+});
+
 function processBarcode(barcode) {
   const card = document.getElementById('item-card');
   const zone = document.getElementById('scan-zone');
@@ -1150,6 +1188,7 @@ function processBarcode(barcode) {
   }
 
   if (!item) {
+    soundNeedsAdd();   // alert: scanned item is not in the system
     zone.classList.remove('flash-success');
     zone.classList.add('flash-error');
     setTimeout(() => zone.classList.remove('flash-error'), 500);
@@ -1189,6 +1228,7 @@ function processBarcode(barcode) {
 
   // Add to cart
   if (cart[item.barcode]) {
+    soundAlreadyInOrder();   // already on this order — distinct beep
     cart[item.barcode].qty++;
   } else {
     cart[item.barcode] = { ...item, qty: 1, ts: Date.now() };
