@@ -1230,6 +1230,7 @@ function processBarcode(barcode) {
   if (cart[item.barcode]) {
     soundAlreadyInOrder();   // already on this order — distinct beep
     cart[item.barcode].qty++;
+    cart[item.barcode].ts = Date.now();   // bump it to the top so its running count is visible
   } else {
     cart[item.barcode] = { ...item, qty: 1, ts: Date.now() };
   }
@@ -1297,7 +1298,10 @@ async function fetchOrder(o) {
     const data = await res.json();
     for (const rec of data.records) {
       const it = itemFromRecord(rec);
-      built[it.barcode || rec.id] = it;
+      const key = it.barcode || rec.id;
+      const prev = (orders[o] || {})[key];
+      if (prev && prev.ts && prev.ts > it.ts) it.ts = prev.ts;  // keep a "bumped to top" line on top across refreshes
+      built[key] = it;
     }
     offset = data.offset;
   } while (offset);
